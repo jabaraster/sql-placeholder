@@ -1,0 +1,23 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-sqlplaceholder-dev-0367b-authRole",
+      "UnauthRoleArn": "arn:aws:iam::195957709288:role/amplify-sqlplaceholder-dev-0367b-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::195957709288:role/amplify-sqlplaceholder-dev-0367b-authRole",
+      "Region": "ap-northeast-1",
+      "DeploymentBucketName": "amplify-sqlplaceholder-dev-0367b-deployment",
+      "UnauthRoleName": "amplify-sqlplaceholder-dev-0367b-unauthRole",
+      "StackName": "amplify-sqlplaceholder-dev-0367b",
+      "StackId": "arn:aws:cloudformation:ap-northeast-1:195957709288:stack/amplify-sqlplaceholder-dev-0367b/61bafbf0-7d29-11ef-8582-0ef020401711",
+      "AmplifyAppId": "d3v3xgpi9rggue"
+    },
+    "categories": {
+      "hosting": {
+        "amplifyhosting": {
+          "appId": "d3v3xgpi9rggue",
+          "type": "manual"
+        }
+      }
+    }
+  }
+}
