@@ -1,11 +1,13 @@
 port module Main exposing (..)
 
 import Browser
+import Css exposing (..)
 import Html
-import Html.Styled exposing (..)
+import Html.Styled exposing (button, div, hr, text, textarea)
 import Html.Styled.Attributes exposing (..)
 import Html.Styled.Events exposing (..)
 import Json.Decode as Decode
+import SqlParser
 
 
 
@@ -13,12 +15,20 @@ import Json.Decode as Decode
 
 
 type alias Model =
-    { count : Int }
+    { count : Int
+    , sql : String
+    , debug : String
+    }
 
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( { count = 0 }, Cmd.none )
+    ( { count = 0
+      , sql = ""
+      , debug = ""
+      }
+    , Cmd.none
+    )
 
 
 
@@ -28,6 +38,8 @@ init _ =
 type Msg
     = Increment
     | Decrement
+    | OnInputSql String
+    | Parse
     | JsMessage String
 
 
@@ -39,6 +51,12 @@ update msg model =
 
         Decrement ->
             ( { model | count = model.count - 1 }, Cmd.none )
+
+        OnInputSql sql ->
+            ( { model | sql = sql, debug = Debug.toString <| SqlParser.parse sql }, Cmd.none )
+
+        Parse ->
+            ( model, Cmd.none )
 
         JsMessage message ->
             -- Handle the message from JavaScript here
@@ -52,10 +70,11 @@ update msg model =
 view : Model -> Html.Html Msg
 view model =
     Html.Styled.toUnstyled <|
-        div []
-            [ div [] [ text (String.fromInt model.count) ]
-            , button [ onClick Increment ] [ text "+" ]
-            , button [ onClick Decrement ] [ text "-" ]
+        div [ css [ margin (rem 1) ] ]
+            [ textarea [ class "textarea", value model.sql, onInput OnInputSql ] []
+            , button [ class "button", onClick Parse ] [ text "parse" ]
+            , hr [] []
+            , div [] [ text model.debug ]
             ]
 
 
