@@ -1,34 +1,50 @@
 port module Main exposing (..)
 
 import Browser
+import Bulma.Classes as B
 import Css exposing (..)
 import Html
-import Html.Styled exposing (button, div, hr, text, textarea)
+import Html.Styled exposing (Html, button, div, hr, input, label, text, textarea)
 import Html.Styled.Attributes exposing (..)
 import Html.Styled.Events exposing (..)
 import Json.Decode as Decode
-import SqlParser
+import List.Extra as List
+import Set
+import SqlParser exposing (..)
+import Util exposing (ListElement(..))
+import Views
 
 
 
 -- MODEL
 
 
+type alias PlaceholderValue =
+    { name : String
+    , value : String
+    }
+
+
 type alias Model =
-    { count : Int
-    , sql : String
+    { sql : String
+    , sqlTokens : List Token
+    , placeholderValues : Maybe (List PlaceholderValue)
     , debug : String
     }
 
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( { count = 0
-      , sql = ""
-      , debug = ""
-      }
-    , Cmd.none
-    )
+    let
+        initialSql =
+            "select * from users where id = @id"
+    in
+    { sql = initialSql
+    , sqlTokens = []
+    , placeholderValues = Nothing
+    , debug = ""
+    }
+        |> parseCore
 
 
 
@@ -36,30 +52,66 @@ init _ =
 
 
 type Msg
-    = Increment
-    | Decrement
-    | OnInputSql String
+    = OnInputSql String
     | Parse
+    | OnInputPlaceholderValues String String
     | JsMessage String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Increment ->
-            ( { model | count = model.count + 1 }, Cmd.none )
-
-        Decrement ->
-            ( { model | count = model.count - 1 }, Cmd.none )
-
         OnInputSql sql ->
-            ( { model | sql = sql, debug = Debug.toString <| SqlParser.parse sql }, Cmd.none )
+            ( { model | sql = sql }, Cmd.none )
 
         Parse ->
-            ( model, Cmd.none )
+            parseCore model
+
+        OnInputPlaceholderValues placeholderName value ->
+            ( { model
+                | placeholderValues =
+                    flip Maybe.map
+                        model.placeholderValues
+                        (List.updateIf (\pv -> pv.name == placeholderName)
+                            (\pv -> { pv | value = value })
+                        )
+              }
+            , Cmd.none
+            )
 
         JsMessage message ->
-            -- Handle the message from JavaScript here
+            ( model, Cmd.none )
+
+
+flip : (a -> b -> c) -> b -> a -> c
+flip f b a =
+    f a b
+
+
+parseCore model =
+    case SqlParser.parse model.sql of
+        Ok tokens ->
+            let
+                ts =
+                    tokens
+                        |> List.filter isPlaceholder
+                        |> List.map
+                            (\token ->
+                                case token of
+                                    Placeholder name ->
+                                        name
+
+                                    _ ->
+                                        ""
+                            )
+                        |> Set.fromList
+                        |> Set.toList
+                        |> List.sort
+                        |> List.map (\name -> { name = name, value = "" })
+            in
+            ( { model | placeholderValues = Just ts, sqlTokens = tokens }, Cmd.none )
+
+        Err err ->
             ( model, Cmd.none )
 
 
@@ -70,12 +122,68 @@ update msg model =
 view : Model -> Html.Html Msg
 view model =
     Html.Styled.toUnstyled <|
-        div [ css [ margin (rem 1) ] ]
-            [ textarea [ class "textarea", value model.sql, onInput OnInputSql ] []
-            , button [ class "button", onClick Parse ] [ text "parse" ]
-            , hr [] []
-            , div [] [ text model.debug ]
+        div [ css [ margin (rem 1) ] ] <|
+            Views.build
+                [ Single <|
+                    textarea
+                        [ class B.textarea
+                        , css [ fontFamily monospace ]
+                        , value model.sql
+                        , onInput OnInputSql
+                        ]
+                        []
+                , Single <| button [ class "button", onClick Parse ] [ text "parse" ]
+                , Single <| div [ css [ fontFamily monospace ] ] [ text model.debug ]
+                , Single <| hr [] []
+                , Single <| label [] [ text "Placeholders" ]
+                , Plural <| List.map viewPlaceholderValue <| Maybe.withDefault [] model.placeholderValues
+                , Single <| hr [] []
+                , Single <| label [] [ text "Executable SQL" ]
+                , Single <|
+                    textarea
+                        [ class B.textarea
+                        , css [ fontFamily monospace ]
+                        , readonly True
+                        ]
+                        [ text <| buildSql model ]
+                ]
+
+
+buildSql : Model -> String
+buildSql model =
+    String.concat <|
+        List.map
+            (\token ->
+                case token of
+                    Literal s ->
+                        s
+
+                    Placeholder name ->
+                        case List.find (\pv -> pv.name == name) <| Maybe.withDefault [] model.placeholderValues of
+                            Just pv ->
+                                if pv.value == "" then
+                                    name
+
+                                else
+                                    pv.value
+
+                            Nothing ->
+                                name
+            )
+            model.sqlTokens
+
+
+viewPlaceholderValue : PlaceholderValue -> Html Msg
+viewPlaceholderValue pv =
+    div []
+        [ label [ css [ display block ] ] [ text pv.name ]
+        , input
+            [ value pv.value
+            , class B.input
+            , onInput <| OnInputPlaceholderValues pv.name
             ]
+            []
+        ]
 
 
 

@@ -1,4 +1,4 @@
-module SqlParser exposing (..)
+module SqlParser exposing (Token(..), isPlaceholder, parse)
 
 import Parser exposing (..)
 import Set
@@ -9,10 +9,17 @@ type Token
     | Placeholder String
 
 
+isPlaceholder : Token -> Bool
+isPlaceholder t =
+    case t of
+        Placeholder _ ->
+            True
 
--- parse : String -> Result (List DeadEnd) (List Token)
+        _ ->
+            False
 
 
+parse : String -> Result (List DeadEnd) (List Token)
 parse =
     run tokens
 
