@@ -29,6 +29,7 @@ type alias Model =
     { sql : String
     , sqlTokens : List Token
     , placeholderValues : Maybe (List PlaceholderValue)
+    , formattedSql : String
     , debug : String
     }
 
@@ -42,6 +43,7 @@ init _ =
     { sql = initialSql
     , sqlTokens = []
     , placeholderValues = Nothing
+    , formattedSql = ""
     , debug = ""
     }
         |> parseCore
@@ -55,7 +57,7 @@ type Msg
     = OnInputSql String
     | Parse
     | OnInputPlaceholderValues String String
-    | JsMessage String
+    | GotFormattedSql String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -68,19 +70,18 @@ update msg model =
             parseCore model
 
         OnInputPlaceholderValues placeholderName value ->
-            ( { model
+            { model
                 | placeholderValues =
                     flip Maybe.map
                         model.placeholderValues
                         (List.updateIf (\pv -> pv.name == placeholderName)
                             (\pv -> { pv | value = value })
                         )
-              }
-            , Cmd.none
-            )
+            }
+                |> (\m -> ( m, formatSql <| buildSql m ))
 
-        JsMessage message ->
-            ( model, Cmd.none )
+        GotFormattedSql s ->
+            ( { model | formattedSql = s }, Cmd.none )
 
 
 flip : (a -> b -> c) -> b -> a -> c
@@ -142,10 +143,10 @@ view model =
                 , Single <|
                     textarea
                         [ class B.textarea
-                        , css [ fontFamily monospace ]
+                        , css [ fontFamily monospace, fontSize (rem 0.8), Css.height (rem 30) ]
                         , readonly True
                         ]
-                        [ text <| buildSql model ]
+                        [ text model.formattedSql ]
                 ]
 
 
@@ -190,12 +191,15 @@ viewPlaceholderValue pv =
 -- SUBSCRIPTIONS
 
 
-port jsToElm : (String -> msg) -> Sub msg
+port receiveFormattedSql : (String -> msg) -> Sub msg
 
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    jsToElm JsMessage
+    receiveFormattedSql GotFormattedSql
+
+
+port formatSql : String -> Cmd msg
 
 
 
