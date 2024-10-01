@@ -3,8 +3,9 @@ port module Main exposing (..)
 import Browser
 import Bulma.Classes as B
 import Css exposing (..)
+import Dict exposing (Dict)
 import Html
-import Html.Styled exposing (Html, button, div, hr, input, label, text, textarea)
+import Html.Styled exposing (Html, button, div, hr, input, label, section, text, textarea)
 import Html.Styled.Attributes exposing (..)
 import Html.Styled.Events exposing (..)
 import Json.Decode as Decode
@@ -19,16 +20,10 @@ import Views
 -- MODEL
 
 
-type alias PlaceholderValue =
-    { name : String
-    , value : String
-    }
-
-
 type alias Model =
     { sql : String
     , sqlTokens : List Token
-    , placeholderValues : Maybe (List PlaceholderValue)
+    , placeholderValues : Dict String String
     , formattedSql : String
     , debug : String
     }
@@ -36,17 +31,13 @@ type alias Model =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    let
-        initialSql =
-            "select * from users where id = @id"
-    in
-    { sql = initialSql
+    { sql = ""
     , sqlTokens = []
-    , placeholderValues = Nothing
+    , placeholderValues = Dict.empty
     , formattedSql = ""
     , debug = ""
     }
-        |> parseCore
+        |> onInputSql "select * from users where id = @id"
 
 
 
@@ -64,56 +55,88 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         OnInputSql sql ->
-            ( { model | sql = sql }, Cmd.none )
+            onInputSql sql model
 
         Parse ->
-            parseCore model
+            ( model, Cmd.none )
 
         OnInputPlaceholderValues placeholderName value ->
-            { model
-                | placeholderValues =
-                    flip Maybe.map
-                        model.placeholderValues
-                        (List.updateIf (\pv -> pv.name == placeholderName)
-                            (\pv -> { pv | value = value })
-                        )
-            }
-                |> (\m -> ( m, formatSql <| buildSql m ))
+            case Dict.get placeholderName model.placeholderValues of
+                Just _ ->
+                    let
+                        new =
+                            Dict.update
+                                placeholderName
+                                (\_ -> Just value)
+                                model.placeholderValues
+                    in
+                    ( { model
+                        | placeholderValues = new
+                      }
+                    , formatSql <| buildSql new model.sqlTokens
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
 
         GotFormattedSql s ->
             ( { model | formattedSql = s }, Cmd.none )
 
 
-flip : (a -> b -> c) -> b -> a -> c
-flip f b a =
-    f a b
+toPlaceholderValues : List Token -> Dict String String
+toPlaceholderValues =
+    List.foldr
+        (\token acum ->
+            case token of
+                Placeholder name ->
+                    Dict.insert name "" acum
+
+                _ ->
+                    acum
+        )
+        Dict.empty
 
 
-parseCore model =
-    case SqlParser.parse model.sql of
+buildSql : Dict String String -> List Token -> String
+buildSql placeholderValues =
+    String.concat
+        << List.map
+            (\token ->
+                case token of
+                    Literal s ->
+                        s
+
+                    Placeholder name ->
+                        case Dict.get name placeholderValues of
+                            Just val ->
+                                if val == "" then
+                                    name
+
+                                else
+                                    val
+
+                            Nothing ->
+                                name
+            )
+
+
+onInputSql sql model =
+    case SqlParser.parse sql of
+        Err err ->
+            ( { model | sql = sql }, Cmd.none )
+
         Ok tokens ->
             let
-                ts =
-                    tokens
-                        |> List.filter isPlaceholder
-                        |> List.map
-                            (\token ->
-                                case token of
-                                    Placeholder name ->
-                                        name
-
-                                    _ ->
-                                        ""
-                            )
-                        |> Set.fromList
-                        |> Set.toList
-                        |> List.sort
-                        |> List.map (\name -> { name = name, value = "" })
+                new =
+                    toPlaceholderValues tokens
             in
-            ( { model | placeholderValues = Just ts, sqlTokens = tokens }, Cmd.none )
-
-        Err err ->
-            ( model, Cmd.none )
+            ( { model
+                | sql = sql
+                , sqlTokens = tokens
+                , placeholderValues = Dict.union model.placeholderValues new
+              }
+            , formatSql <| buildSql new tokens
+            )
 
 
 
@@ -126,65 +149,70 @@ view model =
         div [ css [ margin (rem 1) ] ] <|
             Views.build
                 [ Single <|
-                    textarea
-                        [ class B.textarea
-                        , css [ fontFamily monospace ]
-                        , value model.sql
-                        , onInput OnInputSql
+                    section [ class B.content ]
+                        [ textarea
+                            [ class B.textarea
+                            , css [ fontFamily monospace ]
+                            , value model.sql
+                            , onInput OnInputSql
+                            ]
+                            []
                         ]
-                        []
-                , Single <| button [ class "button", onClick Parse ] [ text "parse" ]
-                , Single <| div [ css [ fontFamily monospace ] ] [ text model.debug ]
-                , Single <| hr [] []
-                , Single <| label [] [ text "Placeholders" ]
-                , Plural <| List.map viewPlaceholderValue <| Maybe.withDefault [] model.placeholderValues
-                , Single <| hr [] []
-                , Single <| label [] [ text "Executable SQL" ]
                 , Single <|
-                    textarea
-                        [ class B.textarea
-                        , css [ fontFamily monospace, fontSize (rem 0.8), Css.height (rem 30) ]
-                        , readonly True
+                    section [ class B.content ] <|
+                        (label [ class B.pt4, class B.content ] [ text "Placeholders" ]
+                            :: (List.map (viewPlaceholderValue model.placeholderValues) <|
+                                    placeholderNames model.sqlTokens
+                               )
+                        )
+                , Single <|
+                    section [ class B.content ]
+                        [ label [] [ text "Executable SQL" ]
+                        , textarea
+                            [ class B.textarea
+                            , css [ fontFamily monospace, fontSize (rem 0.8), Css.height (rem 30) ]
+                            , readonly True
+                            ]
+                            [ text model.formattedSql ]
                         ]
-                        [ text model.formattedSql ]
                 ]
 
 
-buildSql : Model -> String
-buildSql model =
-    String.concat <|
-        List.map
-            (\token ->
+viewPlaceholderValue : Dict String String -> String -> Html Msg
+viewPlaceholderValue pv name =
+    case Dict.get name pv of
+        Nothing ->
+            div [] []
+
+        Just val ->
+            div []
+                [ label [ css [ display block ] ] [ text name ]
+                , input
+                    [ value val
+                    , class B.input
+                    , onInput <| OnInputPlaceholderValues name
+                    ]
+                    []
+                ]
+
+
+placeholderNames : List Token -> List String
+placeholderNames =
+    Tuple.first
+        << List.foldr
+            (\token ( acum, dupChekder ) ->
                 case token of
-                    Literal s ->
-                        s
-
                     Placeholder name ->
-                        case List.find (\pv -> pv.name == name) <| Maybe.withDefault [] model.placeholderValues of
-                            Just pv ->
-                                if pv.value == "" then
-                                    name
+                        if Set.member name dupChekder then
+                            ( acum, dupChekder )
 
-                                else
-                                    pv.value
+                        else
+                            ( name :: acum, Set.insert name dupChekder )
 
-                            Nothing ->
-                                name
+                    _ ->
+                        ( acum, dupChekder )
             )
-            model.sqlTokens
-
-
-viewPlaceholderValue : PlaceholderValue -> Html Msg
-viewPlaceholderValue pv =
-    div []
-        [ label [ css [ display block ] ] [ text pv.name ]
-        , input
-            [ value pv.value
-            , class B.input
-            , onInput <| OnInputPlaceholderValues pv.name
-            ]
-            []
-        ]
+            ( [], Set.empty )
 
 
 
