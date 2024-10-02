@@ -128,12 +128,12 @@ onInputSql sql model =
         Ok tokens ->
             let
                 new =
-                    toPlaceholderValues tokens
+                    Dict.union model.placeholderValues <| toPlaceholderValues tokens
             in
             ( { model
                 | sql = sql
                 , sqlTokens = tokens
-                , placeholderValues = Dict.union model.placeholderValues new
+                , placeholderValues = new
               }
             , formatSql <| buildSql new tokens
             )
@@ -146,37 +146,39 @@ onInputSql sql model =
 view : Model -> Html.Html Msg
 view model =
     Html.Styled.toUnstyled <|
-        div [ css [ margin (rem 1) ] ] <|
+        div [ class "main-area", css [ margin (rem 1) ] ] <|
             Views.build
                 [ Single <|
-                    section [ class B.content ]
-                        [ textarea
+                    section [ class "source-sql-area", class B.content ]
+                        [ label [] [ text "Source SQL" ]
+                        , textarea
                             [ class B.textarea
-                            , css [ fontFamily monospace ]
+                            , css styleTextarea
                             , value model.sql
                             , onInput OnInputSql
                             ]
                             []
                         ]
                 , Single <|
-                    section [ class B.content ] <|
+                    section [ class "placeholders-area", class B.content ] <|
                         (label [ class B.pt4, class B.content ] [ text "Placeholders" ]
                             :: (List.map (viewPlaceholderValue model.placeholderValues) <|
                                     placeholderNames model.sqlTokens
                                )
                         )
                 , Single <|
-                    section [ class B.content ]
+                    section [ class "executable-sql-area", class B.content ]
                         [ label [] [ text "Executable SQL" ]
                         , textarea
                             [ class B.textarea
-                            , css [ fontFamily monospace, fontSize (rem 0.8), Css.height (rem 30) ]
+                            , css  styleTextarea
                             , readonly True
                             ]
                             [ text model.formattedSql ]
                         ]
                 ]
 
+styleTextarea = [ fontFamily monospace, Css.height (pct 100) ]
 
 viewPlaceholderValue : Dict String String -> String -> Html Msg
 viewPlaceholderValue pv name =
