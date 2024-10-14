@@ -1,12 +1,24 @@
 .main-area {
+    width: 100vw;
+    height: 100vh;
     display: grid;
     grid-template-rows: 400px 1fr;
-    grid-template-columns: 49% 8px 49%;
+    grid-template-columns: 49% 1% 49%;
+
+    > section {
+        padding: .5rem;
+    }
 }
 
 .source-sql-area {
     grid-row: 1/1;
     grid-column: 1/1;
+    display: flex;
+    flex-direction: column;
+
+    > textarea {
+        flex-grow: 1;
+    }
 }
 
 .placeholders-area {
@@ -15,6 +27,12 @@
 }
 
 .executable-sql-area {
-    grid-row: 1/2;
+    grid-row: 1/3;
     grid-column: 3/3;
+    display: flex;
+    flex-direction: column;
+
+    > textarea {
+        flex-grow: 1;
+    }
 }

@@ -146,10 +146,10 @@ onInputSql sql model =
 view : Model -> Html.Html Msg
 view model =
     Html.Styled.toUnstyled <|
-        div [ class "main-area", css [ margin (rem 1) ] ] <|
+        div [ class "main-area" ] <|
             Views.build
                 [ Single <|
-                    section [ class "source-sql-area", class B.content ]
+                    section [ class "source-sql-area" ]
                         [ label [] [ text "Source SQL" ]
                         , textarea
                             [ class B.textarea
@@ -160,14 +160,14 @@ view model =
                             []
                         ]
                 , Single <|
-                    section [ class "placeholders-area", class B.content ] <|
+                    section [ class "placeholders-area" ] <|
                         (label [ class B.pt4, class B.content ] [ text "Placeholders" ]
                             :: (List.map (viewPlaceholderValue model.placeholderValues) <|
                                     placeholderNames model.sqlTokens
                                )
                         )
                 , Single <|
-                    section [ class "executable-sql-area", class B.content ]
+                    section [ class "executable-sql-area" ]
                         [ label [] [ text "Executable SQL" ]
                         , textarea
                             [ class B.textarea
